@@ -3,7 +3,7 @@ import { BOOK_STATUS_MAP } from '../constants/bookStatus'
 const FALLBACK_COVER =
   'https://images.unsplash.com/photo-1519682577862-22b62b24e493?auto=format&fit=crop&w=800&q=80'
 
-function BookCard({ book, onDelete, onEdit, onToggleStatus }) {
+function BookCard({ book, onDelete, onEdit, onOpenNote, onToggleStatus }) {
   const statusMeta = BOOK_STATUS_MAP[book.status]
   const coverImage = book.coverImage || FALLBACK_COVER
 
@@ -32,15 +32,26 @@ function BookCard({ book, onDelete, onEdit, onToggleStatus }) {
           <p className="mt-1 text-sm text-slate-600">{book.author}</p>
         </div>
 
-        {book.note ? <p className="line-clamp-2 text-sm text-slate-500">{book.note}</p> : null}
+        {book.note ? (
+          <p className="line-clamp-2 text-sm text-slate-500">{book.note}</p>
+        ) : (
+          <p className="text-sm text-slate-400">暂无笔记，记录你的阅读感想吧。</p>
+        )}
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={onToggleStatus}
             className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
           >
             切换状态
+          </button>
+          <button
+            type="button"
+            onClick={onOpenNote}
+            className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700 transition hover:bg-violet-100"
+          >
+            笔记
           </button>
           <button
             type="button"

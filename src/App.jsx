@@ -1,20 +1,29 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AddBookModal from './components/AddBookModal'
 import AppLayout from './components/AppLayout'
+import BookNoteModal from './components/BookNoteModal'
 import BookshelfGrid from './components/BookshelfGrid'
 import FilterBar from './components/FilterBar'
 import { FILTER_OPTIONS, SORT_OPTIONS, STATUS_SEQUENCE } from './constants/bookStatus'
-import { useLocalStorage } from './hooks/useLocalStorage'
-
-const STORAGE_KEY = 'smart-bookshelf-data'
+import {
+  createBook,
+  deleteBook,
+  fetchBooks,
+  updateBook,
+  updateBookNote,
+  updateBookStatus,
+} from './services/booksService'
 
 function App() {
-  const [books, setBooks] = useLocalStorage(STORAGE_KEY, [])
+  const [books, setBooks] = useState([])
   const booksList = Array.isArray(books) ? books : []
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeSort, setActiveSort] = useState('newest')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingBook, setEditingBook] = useState(null)
+  const [noteBook, setNoteBook] = useState(null)
 
   const stats = useMemo(() => {
     return {
@@ -49,6 +58,24 @@ function App() {
     return booksCopy
   }, [activeFilter, activeSort, booksList])
 
+  const loadBooks = async () => {
+    setIsLoading(true)
+    setErrorMessage('')
+
+    try {
+      const data = await fetchBooks()
+      setBooks(data)
+    } catch (error) {
+      setErrorMessage(error.message || '加载书籍失败，请稍后重试。')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadBooks()
+  }, [])
+
   const openCreateModal = () => {
     setEditingBook(null)
     setIsModalOpen(true)
@@ -64,69 +91,96 @@ function App() {
     setIsModalOpen(false)
   }
 
-  const handleSaveBook = (bookInput) => {
-    if (editingBook) {
-      setBooks((currentBooks) => {
-        const safeBooks = Array.isArray(currentBooks) ? currentBooks : []
-        return safeBooks.map((book) => {
-          if (book.id !== editingBook.id) {
-            return book
-          }
+  const handleSaveBook = async (bookInput) => {
+    setErrorMessage('')
 
-          return {
-            ...book,
-            ...bookInput,
-            updatedAt: new Date().toISOString(),
-          }
-        })
-      })
-      closeModal()
+    if (editingBook) {
+      try {
+        const savedBook = await updateBook(editingBook.id, bookInput)
+        setBooks((currentBooks) =>
+          currentBooks.map((book) => (book.id === savedBook.id ? savedBook : book)),
+        )
+        closeModal()
+      } catch (error) {
+        setErrorMessage(error.message || '保存失败，请稍后重试。')
+      }
       return
     }
 
-    const now = new Date().toISOString()
-    const newBook = {
-      ...bookInput,
-      id: crypto.randomUUID(),
-      createdAt: now,
-      updatedAt: now,
+    try {
+      const newBook = await createBook(bookInput)
+      setBooks((currentBooks) => [newBook, ...currentBooks])
+      closeModal()
+    } catch (error) {
+      setErrorMessage(error.message || '新增失败，请稍后重试。')
     }
-    setBooks((currentBooks) => {
-      const safeBooks = Array.isArray(currentBooks) ? currentBooks : []
-      return [newBook, ...safeBooks]
-    })
-    closeModal()
   }
 
-  const handleDeleteBook = (bookId) => {
-    setBooks((currentBooks) => {
-      const safeBooks = Array.isArray(currentBooks) ? currentBooks : []
-      return safeBooks.filter((book) => book.id !== bookId)
-    })
+  const handleDeleteBook = async (bookId) => {
+    setErrorMessage('')
+
+    try {
+      await deleteBook(bookId)
+      setBooks((currentBooks) => currentBooks.filter((book) => book.id !== bookId))
+    } catch (error) {
+      setErrorMessage(error.message || '删除失败，请稍后重试。')
+    }
   }
 
-  const handleQuickToggleStatus = (bookId) => {
-    setBooks((currentBooks) => {
-      const safeBooks = Array.isArray(currentBooks) ? currentBooks : []
-      return safeBooks.map((book) => {
-        if (book.id !== bookId) {
-          return book
-        }
+  const handleQuickToggleStatus = async (bookId) => {
+    setErrorMessage('')
 
-        const currentIndex = STATUS_SEQUENCE.indexOf(book.status)
-        const nextStatus = STATUS_SEQUENCE[(currentIndex + 1) % STATUS_SEQUENCE.length]
+    const currentBook = booksList.find((book) => book.id === bookId)
+    if (!currentBook) {
+      return
+    }
 
-        return {
-          ...book,
-          status: nextStatus,
-          updatedAt: new Date().toISOString(),
-        }
-      })
-    })
+    const currentIndex = STATUS_SEQUENCE.indexOf(currentBook.status)
+    const nextStatus = STATUS_SEQUENCE[(currentIndex + 1) % STATUS_SEQUENCE.length]
+
+    try {
+      const updatedBook = await updateBookStatus(bookId, nextStatus)
+      setBooks((currentBooks) =>
+        currentBooks.map((book) => (book.id === updatedBook.id ? updatedBook : book)),
+      )
+    } catch (error) {
+      setErrorMessage(error.message || '切换状态失败，请稍后重试。')
+    }
+  }
+
+  const openNoteModal = (book) => {
+    setNoteBook(book)
+  }
+
+  const closeNoteModal = () => {
+    setNoteBook(null)
+  }
+
+  const handleSaveNote = async (noteContent) => {
+    setErrorMessage('')
+
+    if (!noteBook) {
+      return
+    }
+
+    try {
+      const updatedBook = await updateBookNote(noteBook.id, noteContent)
+      setBooks((currentBooks) =>
+        currentBooks.map((book) => (book.id === updatedBook.id ? updatedBook : book)),
+      )
+      closeNoteModal()
+    } catch (error) {
+      setErrorMessage(error.message || '保存笔记失败，请稍后重试。')
+    }
   }
 
   return (
     <AppLayout stats={stats} onAddBook={openCreateModal}>
+      {errorMessage ? (
+        <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errorMessage}
+        </section>
+      ) : null}
       <FilterBar
         activeFilter={activeFilter}
         activeSort={activeSort}
@@ -136,9 +190,11 @@ function App() {
         onChangeSort={setActiveSort}
       />
       <BookshelfGrid
+        isLoading={isLoading}
         books={filteredAndSortedBooks}
         onDeleteBook={handleDeleteBook}
         onEditBook={openEditModal}
+        onOpenNote={openNoteModal}
         onToggleStatus={handleQuickToggleStatus}
       />
       <AddBookModal
@@ -146,6 +202,12 @@ function App() {
         book={editingBook}
         onClose={closeModal}
         onSave={handleSaveBook}
+      />
+      <BookNoteModal
+        book={noteBook}
+        isOpen={Boolean(noteBook)}
+        onClose={closeNoteModal}
+        onSave={handleSaveNote}
       />
     </AppLayout>
   )
