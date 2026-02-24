@@ -1,6 +1,16 @@
-import { supabase } from '../lib/supabaseClient'
+import { hasSupabaseEnv, supabase } from '../lib/supabaseClient'
 
 const TABLE_NAME = 'books'
+
+const getSupabase = () => {
+  if (!hasSupabaseEnv || !supabase) {
+    throw new Error(
+      'Missing Supabase env vars. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel/Local env settings.',
+    )
+  }
+
+  return supabase
+}
 
 const toClientBook = (record) => ({
   id: record.id,
@@ -22,7 +32,8 @@ const toDbPayload = (bookInput) => ({
 })
 
 export async function fetchBooks() {
-  const { data, error } = await supabase
+  const db = getSupabase()
+  const { data, error } = await db
     .from(TABLE_NAME)
     .select('*')
     .order('created_at', { ascending: false })
@@ -35,7 +46,8 @@ export async function fetchBooks() {
 }
 
 export async function createBook(bookInput) {
-  const { data, error } = await supabase
+  const db = getSupabase()
+  const { data, error } = await db
     .from(TABLE_NAME)
     .insert(toDbPayload(bookInput))
     .select('*')
@@ -49,7 +61,8 @@ export async function createBook(bookInput) {
 }
 
 export async function updateBook(bookId, bookInput) {
-  const { data, error } = await supabase
+  const db = getSupabase()
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update({
       ...toDbPayload(bookInput),
@@ -67,7 +80,8 @@ export async function updateBook(bookId, bookInput) {
 }
 
 export async function updateBookStatus(bookId, status) {
-  const { data, error } = await supabase
+  const db = getSupabase()
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update({
       status,
@@ -85,7 +99,8 @@ export async function updateBookStatus(bookId, status) {
 }
 
 export async function updateBookNote(bookId, note) {
-  const { data, error } = await supabase
+  const db = getSupabase()
+  const { data, error } = await db
     .from(TABLE_NAME)
     .update({
       note: note || null,
@@ -103,7 +118,8 @@ export async function updateBookNote(bookId, note) {
 }
 
 export async function deleteBook(bookId) {
-  const { error } = await supabase.from(TABLE_NAME).delete().eq('id', bookId)
+  const db = getSupabase()
+  const { error } = await db.from(TABLE_NAME).delete().eq('id', bookId)
 
   if (error) {
     throw error
